@@ -1,0 +1,330 @@
+<template>
+  <el-card>
+    <el-container>
+      <el-header height="40px">
+        <!--  card头中的组件  -->
+        <el-row>
+          <el-col :span="12">
+            <div class="card-header-left">
+              <el-button type="success" size="large" @click="addClassification">
+                <el-icon>
+                  <Plus></Plus>
+                </el-icon>
+                新增
+              </el-button>
+              <el-button size="large" @click="searchClassification">
+                <el-icon>
+                  <Search></Search>
+                </el-icon>
+                查询
+              </el-button>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div class="card-header-right">
+              <el-button type="success" size="large" circle />
+              <el-button type="success" size="large" circle />
+              <el-button type="success" size="large" circle />
+            </div>
+          </el-col>
+        </el-row>
+      </el-header>
+      <el-main >
+        <!--  表格  -->
+        <el-table :data="datalist.slice((currentPage - 1) * pageSize, currentPage * pageSize)"
+                  highlight-current-row height="500" style="width: 100%" size="middle" >
+          <el-table-column prop="name" label="项目系列名称" class="table-column" show-overflow-tooltip />
+          <el-table-column prop="code" label="项目系列编码" class="table-column" show-overflow-tooltip />
+          <el-table-column fixed="right" label="操作" width="160" type="index">
+            <template v-slot="scope">
+              <el-button link type="warning" size="large" @click="changeDetail(scope.row)">修改</el-button>
+              <el-button
+                  link
+                  type="danger"
+                  size="large"
+                  @click.prevent="deleteDetail(scope.row)"
+              >删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-main>
+      <el-footer height="45px">
+        <!-- 分页 -->
+        <el-row class="row-bg">
+          <el-col>
+            <el-pagination
+                v-model:currentPage="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[10, 20, 50, 100]"
+                :disabled="disabled"
+                :background="background"
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="datalist.length"
+                class="pagination"
+            />
+          </el-col>
+        </el-row>
+      </el-footer>
+    </el-container>
+  </el-card>
+
+  <!--    新增供应商分类信息表单    -->
+  <el-dialog v-model="dialogFormVisible" width="650px" title="项目类型管理信息新增" @closed="resetFrom">
+    <el-form :model="add_vendor_classification_form" ref="baseForm" class="vendor-form" size="large">
+
+      <el-form-item label="项目系列名称:" :label-width="formLabelWidth" prop="vendor_classification_name">
+        <el-input v-model="add_vendor_classification_form.name" placeholder="项目系列名称" />
+      </el-form-item>
+      <el-form-item label="项目系列编码:" :label-width="formLabelWidth" prop="vendor_classification_code">
+        <el-input v-model="add_vendor_classification_form.code" placeholder="项目系列编码" />
+      </el-form-item>
+
+    </el-form>
+    <template #footer >
+            <span class="dialog-footer">
+              <el-button @click="dialogFormVisible = false" size="large">取消</el-button>
+              <el-button type="primary" size="large" @click="submitFormOfAdd()">提交</el-button>
+            </span>
+    </template>
+  </el-dialog>
+
+  <!--  修改供应商分类信息的表单 -->
+  <el-dialog v-model="dialogFormVisibleOfModify" width="650px" title="项目类型管理信息修改">
+    <el-form :model="modify_vendor_classification_form" ref="baseForm_2" class="vendor-form" size="large">
+
+      <el-form-item label="项目系列名称:" :label-width="formLabelWidth" prop="vendor_classification_name">
+        <el-input v-model="modify_vendor_classification_form.name" placeholder="项目系列名称" />
+      </el-form-item>
+      <el-form-item label="项目系列编码:" :label-width="formLabelWidth" prop="vendor_classification_code">
+        <el-input v-model="modify_vendor_classification_form.code" placeholder="项目系列编码" />
+      </el-form-item>
+
+    </el-form>
+    <template #footer >
+            <span class="dialog-footer">
+              <el-button @click="dialogFormVisibleOfModify = false" size="large">取消</el-button>
+              <el-button type="primary" size="large" @click="submitFormOfModify()">提交</el-button>
+            </span>
+    </template>
+  </el-dialog>
+
+</template>
+
+<script>
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {Plus, Search} from '@element-plus/icons-vue'
+import axios from 'axios'
+export default {
+  name: "project_class_management",
+  components:{
+    Plus,
+    Search
+  },
+  created() {
+    this.searchClassification()
+  },
+  data() {
+    return {
+      dialogFormVisible: false, // 用于控制新增按钮dialog的弹出
+      dialogFormVisibleOfModify: false, // 控制修改按钮的dialog弹出
+      formLabelWidth: "140px",
+      add_vendor_classification_form: { //新增信息表单
+        name: '',
+        code: ''
+      },
+      modify_vendor_classification_form: { //修改信息表单
+        id: '',
+        name: '',
+        code: ''
+      },
+      // rules: { // 新增信息表单验证的规则
+      //   vendor_classification_name: [
+      //     { required: true, message: '请输入项目系列名称', trigger: 'blur' },
+      //   ],
+      //   vendor_classification_code: [
+      //     { required: true, message: '请选择项目系列编码', trigger: 'blur'}
+      //   ],
+      // },
+      currentPage: 1, // 默认页码为1
+      pageSize: 10, // 默认每页pageSize条数据
+      disabled: false, //是否禁用分页
+      background: true, //是否为分页按钮加背景色
+      datalist: [ //表格数据
+        //"id":1,
+        // "name":"数字化",
+        // "code":"A001",
+        // "managerId":1,
+        // "setTime":"2022-06-15T16:00:00.000+00:00"
+      ]
+    }
+  },
+  methods: {
+    addClassification() { // 新增信息
+      console.log("点击新增按钮")
+      this.dialogFormVisible = true
+    },
+    searchClassification() { // 查询（检索）信息
+      console.log("点击查询按钮")
+      axios({
+        url: "/project/projectType",
+        method: "GET",
+      }).then((resp) => {
+        // console.log("打印resp.data.status"+resp.data.status)
+        if (resp.data.status==200) {
+          // this.$router.push("/dashboard");
+          this.datalist = resp.data.data
+          // this.$message.success('查询成功')
+        }else{
+          this.$message.error('查询失败')
+        }
+        this.dialogFormVisible = false;
+      })
+    },
+    changeDetail(data) { // 修改信息
+      this.dialogFormVisibleOfModify = true
+      this.modify_vendor_classification_form = JSON.parse(JSON.stringify(data));
+    },
+    deleteDetail(data) {
+      ElMessageBox.confirm(
+          '确定要删除吗？',
+          '提示',
+          {
+            confirmButtonText: '确认',
+            cancelButtonText: '取消',
+            type: 'warning',
+            buttonSize: 'default'
+          }
+      )
+          .then(() => {
+
+            axios({
+              url: "/project/projectType?id=" + data.id,
+              method: "DELETE",
+            }).then((resp) => {
+              // console.log("打印resp.data.status"+resp.data.status)
+              if (resp.data.status==200) {
+                // this.$router.push("/dashboard");
+                this.$message.success('删除成功')
+                this.searchClassification()
+              }else{
+                this.$message.error('删除失败')
+              }
+              this.dialogFormVisible = false;
+            })
+
+            // ElMessage({
+            //   type: 'success',
+            //   message: '删除成功',
+            // })
+          })
+          .catch(() => {
+            ElMessage({
+              type: 'info',
+              message: '删除取消',
+            })
+          })
+    },
+    submitFormOfAdd() { // 提交表单，进行表单验证
+      // this.$refs.baseForm.validate((valid) => { // 表单验证
+      //   if(!valid) {
+      //     this.$message.warning('请按要求填写数据')
+      //     return false
+      //   }
+      //   // 通过验证
+      //   this.dialogFormVisible = false
+      //   this.$message.success('新增成功')
+      // })
+      axios({
+        url: "/project/projectType",
+        method: "POST",
+        data: {
+          code: this.add_vendor_classification_form.code,
+          name: this.add_vendor_classification_form.name,
+        },
+      }).then((resp) => {
+        // console.log("打印resp.data.status"+resp.data.status)
+        if (resp.data.status==200) {
+          // this.$router.push("/dashboard");
+          this.$message.success('添加成功')
+          this.searchClassification()
+        }else{
+          this.$message.error('添加失败')
+        }
+        this.dialogFormVisible = false;
+      })
+    },
+    submitFormOfModify() {
+      // this.$refs.baseForm_2.validate((valid) => { // 表单验证
+      //   if(!valid) {
+      //     this.$message.warning('请按要求填写数据')
+      //     return false
+      //   }
+      //   // 通过验证
+      //   this.dialogFormVisibleOfModify = false
+      //   this.$message.success('修改成功')
+      // })
+      axios({
+        url: "/project/projectType",
+        method: "PUT",
+        data: {
+          id: this.modify_vendor_classification_form.id,
+          code: this.modify_vendor_classification_form.code,
+          name: this.modify_vendor_classification_form.name,
+        },
+      }).then((resp) => {
+        // console.log("打印resp.data.status"+resp.data.status)
+        if (resp.data.status==200) {
+          // this.$router.push("/dashboard");
+          this.$message.success('修改成功')
+          this.searchClassification()
+        }else{
+          this.$message.error('修改失败')
+        }
+        this.dialogFormVisibleOfModify = false
+      })
+    },
+    resetFrom() { // 重置表单信息，都设置为空
+      this.add_vendor_classification_form = this.$options.data().add_vendor_classification_form
+      this.$refs.baseForm.resetFields() // 移除校验效果
+    }
+  }
+}
+</script>
+
+<style scoped>
+.card-header-left {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 690px;
+}
+.card-header-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  justify-content: flex-end;
+  width: 150px;
+}
+.table-column {
+  width: 120px;
+}
+.pagination {
+   margin-top: 5px;
+   margin-left: auto;
+   justify-content: flex-end;
+ }
+.el-button--text {
+  margin-right: 15px;
+}
+.el-button {
+  margin-left: 10px;
+}
+.vendor-form .el-select,.el-input {
+  width: 350px;
+  font-size: 15px;
+}
+.dialog-footer button:first-child {
+  margin-right: 10px;
+}
+</style>
